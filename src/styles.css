@@ -140,7 +140,7 @@ main { opacity: 0; visibility: hidden; transition: opacity .5s ease; }
 
 .floating-specks i { position: absolute; top: calc((var(--i) * 9%) - 4%); left: calc((var(--i) * 17%) - 8%); width: calc(5px + (var(--i) % 3) * 4px); aspect-ratio: 1; border-radius: 40% 60% 50% 50%; background: hsl(calc(var(--i) * 41) 85% 64%); animation: speckFloat calc(4s + var(--i) * .4s) ease-in-out infinite alternate; opacity: .8; }
 
-.ticker { overflow: hidden; padding: 13px 0 10px; color: var(--forest-deep); background: var(--sun); font: 800 1rem/1 'Baloo 2'; letter-spacing: .12em; white-space: nowrap; transform: rotate(-1deg) scale(1.02); }
+.ticker { overflow: hidden; padding: 13px 0 10px; color: var(--forest-deep); background: var(--sun); font: 800 1rem/1 'Baloo 2'; letter-spacing: .12em; white-space: nowrap; }
 .ticker-track { display: inline-block; min-width: max-content; animation: tickerMove 25s linear infinite; }
 .ticker span { padding-right: 18px; }
 .ticker b { padding: 0 18px; color: var(--coral); }
