@@ -13,6 +13,8 @@ import {
   Share2,
   Sparkles,
   Star,
+  Volume2,
+  VolumeX,
 } from 'lucide-vue-next'
 
 const eventDate = new Date('2026-08-23T10:00:00+07:00')
@@ -20,6 +22,7 @@ const opened = ref(false)
 const scrollY = ref(0)
 const attending = ref(false)
 const showConfetti = ref(false)
+const isMusicPlaying = ref(false)
 const countdown = ref({ days: '00', hours: '00', minutes: '00', seconds: '00' })
 const reduceMotion = ref(false)
 
@@ -29,6 +32,16 @@ const guestName = rawGuest || 'Teman Kecil Eijaz'
 let timer
 let animationFrame
 let observer
+let audioContext
+let musicTimer
+let musicStep = 0
+
+const dinoMelody = [
+  523.25, 659.25, 783.99, 659.25,
+  587.33, 698.46, 783.99, 880,
+  783.99, 659.25, 587.33, 523.25,
+  659.25, 783.99, 1046.5, 783.99,
+]
 
 const heroMediaStyle = computed(() => {
   if (reduceMotion.value) return {}
@@ -74,7 +87,66 @@ function onScroll() {
   })
 }
 
+function makeDinoTone(frequency, startTime, duration, type = 'triangle', volume = 0.055) {
+  if (!audioContext) return
+  const oscillator = audioContext.createOscillator()
+  const gain = audioContext.createGain()
+
+  oscillator.type = type
+  oscillator.frequency.setValueAtTime(frequency, startTime)
+  gain.gain.setValueAtTime(0.0001, startTime)
+  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.018)
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
+
+  oscillator.connect(gain)
+  gain.connect(audioContext.destination)
+  oscillator.start(startTime)
+  oscillator.stop(startTime + duration + 0.03)
+}
+
+function playNextDinoNote() {
+  if (!audioContext || audioContext.state !== 'running') return
+  const now = audioContext.currentTime
+  const note = dinoMelody[musicStep % dinoMelody.length]
+
+  makeDinoTone(note, now, 0.19)
+  if (musicStep % 4 === 0) makeDinoTone(note / 4, now, 0.34, 'sine', 0.045)
+  if (musicStep % 8 === 6) makeDinoTone(note * 2, now + 0.07, 0.085, 'square', 0.014)
+  musicStep += 1
+}
+
+async function startMusic() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext
+  if (!AudioContext) return
+  if (!audioContext) audioContext = new AudioContext()
+  if (audioContext.state === 'suspended') await audioContext.resume()
+  if (musicTimer) window.clearInterval(musicTimer)
+
+  isMusicPlaying.value = true
+  playNextDinoNote()
+  musicTimer = window.setInterval(playNextDinoNote, 230)
+}
+
+function stopMusic() {
+  if (musicTimer) window.clearInterval(musicTimer)
+  musicTimer = null
+  isMusicPlaying.value = false
+  audioContext?.suspend()
+}
+
+function toggleMusic() {
+  if (isMusicPlaying.value) stopMusic()
+  else startMusic()
+}
+
+function handleVisibility() {
+  if (!audioContext || !isMusicPlaying.value) return
+  if (document.hidden) audioContext.suspend()
+  else audioContext.resume()
+}
+
 async function openInvitation() {
+  await startMusic()
   opened.value = true
   document.body.classList.add('invitation-open')
   await nextTick()
@@ -100,13 +172,24 @@ function addToCalendar() {
     'VERSION:2.0',
     'PRODID:-//Eijaz Birthday//ID',
     'BEGIN:VEVENT',
-    'UID:eijaz-23082026@birthday.local',
+    'UID:eijaz-ketapang-23082026@birthday.local',
     'DTSTAMP:20260820T010000Z',
     'DTSTART:20260823T030000Z',
-    'DTEND:20260823T060000Z',
-    'SUMMARY:Petualangan Ulang Tahun Eijaz',
+    'DTEND:20260823T050000Z',
+    'SUMMARY:Ulang Tahun Eijaz — Ketapang Dongkal',
     'DESCRIPTION:Datang dan rayakan hari bahagia Eijaz Nafii Arrahman bersama petualangan dino!',
-    'LOCATION:Cipondoh\\, Tangerang',
+    'LOCATION:Ketapang Dongkal',
+    'URL:https://maps.app.goo.gl/ujSgp5isUNfCQ8QM8',
+    'END:VEVENT',
+    'BEGIN:VEVENT',
+    'UID:eijaz-poris-23082026@birthday.local',
+    'DTSTAMP:20260820T010000Z',
+    'DTSTART:20260823T090000Z',
+    'DTEND:20260823T110000Z',
+    'SUMMARY:Ulang Tahun Eijaz — Poris Plawad Utara',
+    'DESCRIPTION:Petualangan ulang tahun Eijaz berlanjut di lokasi kedua!',
+    'LOCATION:Poris Plawad Utara',
+    'URL:https://maps.app.goo.gl/GbeL4Bz9Hf8g7VZJ9',
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n')
@@ -120,7 +203,7 @@ function addToCalendar() {
 }
 
 function shareInvitation() {
-  const text = `Rawr! 🦕 Ayo ikut petualangan ulang tahun Eijaz Nafii Arrahman, Minggu 23 Agustus 2026 pukul 10.00 WIB di Cipondoh. ${window.location.href}`
+  const text = `Rawr! 🦕 Ayo ikut petualangan ulang tahun Eijaz Nafii Arrahman, Minggu 23 Agustus 2026. Lokasi 1: Ketapang Dongkal pukul 10.00 WIB. Lokasi 2: Poris Plawad Utara pukul 16.00 WIB. ${window.location.href}`
   if (navigator.share) {
     navigator.share({ title: 'Ulang Tahun Eijaz', text }).catch(() => {})
     return
@@ -133,6 +216,7 @@ onMounted(() => {
   updateCountdown()
   timer = window.setInterval(updateCountdown, 1000)
   window.addEventListener('scroll', onScroll, { passive: true })
+  document.addEventListener('visibilitychange', handleVisibility)
 
   observer = new IntersectionObserver(
     (entries) => entries.forEach((entry) => entry.isIntersecting && entry.target.classList.add('is-visible')),
@@ -144,7 +228,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.clearInterval(timer)
   window.removeEventListener('scroll', onScroll)
+  document.removeEventListener('visibilitychange', handleVisibility)
   if (animationFrame) cancelAnimationFrame(animationFrame)
+  if (musicTimer) window.clearInterval(musicTimer)
+  audioContext?.close()
   observer?.disconnect()
 })
 </script>
@@ -162,7 +249,7 @@ onBeforeUnmount(() => {
           <p class="gate-kicker">A special adventure for</p>
           <h1>{{ guestName }}</h1>
           <div class="gate-rule"><span></span><Star :size="16" fill="currentColor" /><span></span></div>
-          <p class="gate-copy">Ada petualangan seru dari zaman dinosaurus yang menunggumu!</p>
+          <p class="gate-copy">Ada petualangan seru dari zaman dinosaurus yang menunggumu! Buka undangan untuk menyalakan musik dino.</p>
           <button class="button button-sun gate-button" type="button" @click="openInvitation">
             <PartyPopper :size="20" />
             Buka Undangan
@@ -178,10 +265,24 @@ onBeforeUnmount(() => {
           <span class="brand-bubble">EJ</span>
           <span>23.08.26</span>
         </a>
-        <button class="nav-action" type="button" @click="scrollToEvent">
-          Detail Acara
-          <Compass :size="17" />
-        </button>
+        <div class="nav-actions">
+          <button
+            class="music-toggle"
+            type="button"
+            :aria-label="isMusicPlaying ? 'Matikan musik dino' : 'Putar musik dino'"
+            :aria-pressed="isMusicPlaying"
+            :title="isMusicPlaying ? 'Matikan musik dino' : 'Putar musik dino'"
+            @click="toggleMusic"
+          >
+            <Volume2 v-if="isMusicPlaying" :size="18" />
+            <VolumeX v-else :size="18" />
+            <span class="music-waves" :class="{ active: isMusicPlaying }" aria-hidden="true"><i></i><i></i><i></i></span>
+          </button>
+          <button class="nav-action" type="button" @click="scrollToEvent">
+            Detail Acara
+            <Compass :size="17" />
+          </button>
+        </div>
       </nav>
 
       <section id="home" class="hero">
@@ -263,7 +364,7 @@ onBeforeUnmount(() => {
         <div class="container">
           <div class="section-heading" data-reveal>
             <p class="kicker">Catat koordinatnya</p>
-            <h2>Tempat kita berkumpul,<br /><em>tertawa & bertualang.</em></h2>
+            <h2>Dua tempat untuk berkumpul,<br /><em>tertawa & bertualang.</em></h2>
           </div>
 
           <div class="event-grid">
@@ -276,27 +377,32 @@ onBeforeUnmount(() => {
                 <strong>23</strong>
                 <div><span>Agustus</span><span>2026</span></div>
               </div>
-              <p>Minggu pagi, saat dinosaurus kecil mulai bermain.</p>
+              <p>Satu hari penuh keceriaan bersama Eijaz dan dinosaurus kecil.</p>
             </article>
 
-            <article class="event-card card-time" data-reveal>
+            <article class="event-card card-place location-one" data-reveal>
               <div class="card-topline">
-                <span class="card-icon blue"><Clock3 :size="24" /></span>
-                <span class="card-index">02 — Jam</span>
+                <span class="card-icon blue"><MapPin :size="24" /></span>
+                <span class="card-index">01 — Lokasi pagi</span>
               </div>
-              <strong class="time-lockup">10<span>00</span></strong>
-              <p>Waktu Indonesia Barat<br />Datang dengan semangat, ya!</p>
+              <div class="location-time"><Clock3 :size="19" /><strong>10.00</strong><span>WIB</span></div>
+              <h3>Ketapang<br />Dongkal</h3>
+              <p>Petualangan pertama dimulai saat para dino kecil bangun dan bermain.</p>
+              <a class="text-link" href="https://maps.app.goo.gl/ujSgp5isUNfCQ8QM8" target="_blank" rel="noopener noreferrer">
+                Buka lokasi pagi <Navigation :size="17" />
+              </a>
             </article>
 
-            <article class="event-card card-place" data-reveal>
+            <article class="event-card card-place location-two" data-reveal>
               <div class="card-topline">
                 <span class="card-icon yellow"><MapPin :size="24" /></span>
-                <span class="card-index">03 — Di mana</span>
+                <span class="card-index">02 — Lokasi sore</span>
               </div>
-              <h3>Cipondoh</h3>
-              <p>Tangerang, Banten<br />Ikuti petunjuk peta menuju lokasi petualangan.</p>
-              <a class="text-link" href="https://www.google.com/maps/search/?api=1&query=Cipondoh%2C+Tangerang" target="_blank" rel="noopener noreferrer">
-                Buka Google Maps <Navigation :size="17" />
+              <div class="location-time"><Clock3 :size="19" /><strong>16.00</strong><span>WIB</span></div>
+              <h3>Poris Plawad<br />Utara</h3>
+              <p>Petualangan berlanjut saat matahari mulai turun. Jangan sampai tertinggal!</p>
+              <a class="text-link" href="https://maps.app.goo.gl/GbeL4Bz9Hf8g7VZJ9" target="_blank" rel="noopener noreferrer">
+                Buka lokasi sore <Navigation :size="17" />
               </a>
             </article>
           </div>
@@ -305,8 +411,11 @@ onBeforeUnmount(() => {
             <button class="button button-forest" type="button" @click="addToCalendar">
               <CalendarPlus :size="20" /> Tambahkan ke Kalender
             </button>
-            <a class="button button-outline" href="https://www.google.com/maps/search/?api=1&query=Cipondoh%2C+Tangerang" target="_blank" rel="noopener noreferrer">
-              <Navigation :size="20" /> Lihat Arah
+            <a class="button button-outline" href="https://maps.app.goo.gl/ujSgp5isUNfCQ8QM8" target="_blank" rel="noopener noreferrer">
+              <Navigation :size="20" /> Lokasi Pagi
+            </a>
+            <a class="button button-outline" href="https://maps.app.goo.gl/GbeL4Bz9Hf8g7VZJ9" target="_blank" rel="noopener noreferrer">
+              <Navigation :size="20" /> Lokasi Sore
             </a>
           </div>
         </div>
@@ -346,7 +455,7 @@ onBeforeUnmount(() => {
         <div class="container footer-inner">
           <div>
             <p class="footer-mark">Eijaz's Dino Day</p>
-            <p>Minggu · 23 Agustus 2026 · 10.00 WIB</p>
+            <p>Minggu · 23 Agustus 2026 · 10.00 & 16.00 WIB</p>
           </div>
           <p>Dibuat dengan banyak cinta & sedikit rawr. 🦕</p>
         </div>
