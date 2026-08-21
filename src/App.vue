@@ -32,16 +32,7 @@ const guestName = rawGuest || 'Teman Kecil Eijaz'
 let timer
 let animationFrame
 let observer
-let audioContext
-let musicTimer
-let musicStep = 0
-
-const dinoMelody = [
-  523.25, 659.25, 783.99, 659.25,
-  587.33, 698.46, 783.99, 880,
-  783.99, 659.25, 587.33, 523.25,
-  659.25, 783.99, 1046.5, 783.99,
-]
+let backgroundMusic
 
 const heroMediaStyle = computed(() => {
   if (reduceMotion.value) return {}
@@ -87,51 +78,30 @@ function onScroll() {
   })
 }
 
-function makeDinoTone(frequency, startTime, duration, type = 'triangle', volume = 0.055) {
-  if (!audioContext) return
-  const oscillator = audioContext.createOscillator()
-  const gain = audioContext.createGain()
+function getBackgroundMusic() {
+  if (!backgroundMusic) {
+    backgroundMusic = new Audio('/little-dino-party-v2.mp3')
+    backgroundMusic.loop = true
+    backgroundMusic.preload = 'auto'
+    backgroundMusic.volume = 0.42
+  }
 
-  oscillator.type = type
-  oscillator.frequency.setValueAtTime(frequency, startTime)
-  gain.gain.setValueAtTime(0.0001, startTime)
-  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.018)
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
-
-  oscillator.connect(gain)
-  gain.connect(audioContext.destination)
-  oscillator.start(startTime)
-  oscillator.stop(startTime + duration + 0.03)
-}
-
-function playNextDinoNote() {
-  if (!audioContext || audioContext.state !== 'running') return
-  const now = audioContext.currentTime
-  const note = dinoMelody[musicStep % dinoMelody.length]
-
-  makeDinoTone(note, now, 0.19)
-  if (musicStep % 4 === 0) makeDinoTone(note / 4, now, 0.34, 'sine', 0.045)
-  if (musicStep % 8 === 6) makeDinoTone(note * 2, now + 0.07, 0.085, 'square', 0.014)
-  musicStep += 1
+  return backgroundMusic
 }
 
 async function startMusic() {
-  const AudioContext = window.AudioContext || window.webkitAudioContext
-  if (!AudioContext) return
-  if (!audioContext) audioContext = new AudioContext()
-  if (audioContext.state === 'suspended') await audioContext.resume()
-  if (musicTimer) window.clearInterval(musicTimer)
-
-  isMusicPlaying.value = true
-  playNextDinoNote()
-  musicTimer = window.setInterval(playNextDinoNote, 230)
+  try {
+    await getBackgroundMusic().play()
+    isMusicPlaying.value = true
+  } catch (error) {
+    isMusicPlaying.value = false
+    console.warn('Musik belum dapat diputar:', error)
+  }
 }
 
 function stopMusic() {
-  if (musicTimer) window.clearInterval(musicTimer)
-  musicTimer = null
+  backgroundMusic?.pause()
   isMusicPlaying.value = false
-  audioContext?.suspend()
 }
 
 function toggleMusic() {
@@ -140,9 +110,11 @@ function toggleMusic() {
 }
 
 function handleVisibility() {
-  if (!audioContext || !isMusicPlaying.value) return
-  if (document.hidden) audioContext.suspend()
-  else audioContext.resume()
+  if (!backgroundMusic || !isMusicPlaying.value) return
+  if (document.hidden) backgroundMusic.pause()
+  else backgroundMusic.play().catch(() => {
+    isMusicPlaying.value = false
+  })
 }
 
 async function openInvitation() {
@@ -230,8 +202,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', onScroll)
   document.removeEventListener('visibilitychange', handleVisibility)
   if (animationFrame) cancelAnimationFrame(animationFrame)
-  if (musicTimer) window.clearInterval(musicTimer)
-  audioContext?.close()
+  backgroundMusic?.pause()
   observer?.disconnect()
 })
 </script>
